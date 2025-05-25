@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sexpad</title>
+  <style>
+    body {
+      margin: 0;
+      background: #1e1e1e;
+      color: #eee;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    header {
+      background: #ff4081;
+      color: white;
+      padding: 10px;
+      font-size: 24px;
+      text-align: center;
+      font-weight: bold;
+    }
+    #toolbar {
+      background: #333;
+      padding: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    button, select {
+      padding: 5px 10px;
+      border: none;
+      background: #555;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover, select:hover {
+      background: #777;
+    }
+    #editor {
+      flex: 1;
+      padding: 20px;
+      background: #2c2c2c;
+      color: white;
+      overflow-y: auto;
+    }
+    #editor:focus {
+      outline: none;
+    }
+    input[type="file"] {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <header>Sexpad</header>
+  <div id="toolbar">
+    <button onclick="exec('bold')">Bold</button>
+    <button onclick="exec('italic')">Italic</button>
+    <select onchange="setFontSize(this.value)">
+      <option value="">Font Size</option>
+      <option value="1">10pt</option>
+      <option value="2">12pt</option>
+      <option value="3">14pt</option>
+      <option value="4">18pt</option>
+      <option value="5">24pt</option>
+      <option value="6">32pt</option>
+      <option value="7">48pt</option>
+    </select>
+    <button onclick="document.getElementById('openFile').click()">Open .rtf</button>
+    <button onclick="saveRTF()">Save as .rtf</button>
+    <input type="file" id="openFile" accept=".rtf,.txt" />
+  </div>
+  <div id="editor" contenteditable="true">
+    Start typing...
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/html-to-rtf/browser.js"></script>
+  <script>
+    const editor = document.getElementById('editor');
+    const openFile = document.getElementById('openFile');
+
+    function exec(cmd) {
+      document.execCommand(cmd, false, null);
+    }
+
+    function setFontSize(size) {
+      document.execCommand("fontSize", false, size);
+    }
+
+    openFile.addEventListener('change', () => {
+      const file = openFile.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const raw = e.target.result;
+        const html = parseRTFtoHTML(raw);
+        editor.innerHTML = html;
+      };
+      reader.readAsText(file);
+    });
+
+    function saveRTF() {
+  function escapeRTF(text) {
+    return text
+      .replace(/\\/g, '\\\\')
+      .replace(/{/g, '\\{')
+      .replace(/}/g, '\\}')
+      .replace(/\n/g, '\\par\n');
+  }
+
+  function convertNode(node) {
+    let rtf = '';
+    let open = '', close = '';
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      return escapeRTF(node.textContent);
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+
+    if (node.tagName === 'B') {
+      open += '\\b ';
+      close = '\\b0 ' + close;
+    }
+
+    if (node.tagName === 'I') {
+      open += '\\i ';
+      close = '\\i0 ' + close;
+    }
+
+    if (node.tagName === 'BR') {
+      return '\\par\n';
+    }
+
+    if (node.tagName === 'SPAN') {
+      const sizeMatch = node.style.fontSize?.match(/(\d+(?:\.\d+)?)pt/);
+      if (sizeMatch) {
+        const size = Math.round(parseFloat(sizeMatch[1]) * 2);
+        open += `\\fs${size} `;
+      }
+    }
+
+    rtf += open;
+
+    for (let child of node.childNodes) {
+      rtf += convertNode(child);
+    }
+
+    rtf += close;
+    return rtf;
+  }
+
+  const content = editor;
+  let rtfBody = convertNode(content);
+  const fullRTF = `{\\rtf1\\ansi\n${rtfBody}\n}`;
+
+  const blob = new Blob([fullRTF], { type: 'application/rtf' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+
+  let filename = prompt("Введите имя файла:", "sexpad.rtf");
+  if (!filename) return;
+  if (!filename.endsWith('.rtf')) filename += '.rtf';
+
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+
+    function decodeCP1251(hex) {
+      const cp1251 = {
+        0x80: 'Ђ', 0x81: 'Ѓ', 0x82: '‚', 0x83: 'ѓ', 0x84: '„', 0x85: '…',
+        0x86: '†', 0x87: '‡', 0x88: '€', 0x89: '‰', 0x8A: 'Љ', 0x8B: '‹',
+        0x8C: 'Њ', 0x8D: 'Ќ', 0x8E: 'Ћ', 0x8F: 'Џ',
+        0x90: 'ђ', 0x91: '‘', 0x92: '’', 0x93: '“', 0x94: '”', 0x95: '•',
+        0x96: '–', 0x97: '—', 0x98: '™', 0x99: 'љ', 0x9A: '›', 0x9B: 'њ',
+        0x9C: 'ќ', 0x9D: 'ћ', 0x9E: 'џ', 0x9F: ' '
+      };
+      const byte = parseInt(hex, 16);
+      if (byte >= 0xC0 && byte <= 0xFF) return String.fromCharCode(0x410 + byte - 0xC0);
+      if (byte >= 0xA0 && byte <= 0xBF) return String.fromCharCode(0x400 + byte - 0xA0);
+      return cp1251[byte] || String.fromCharCode(byte);
+    }
+
+    function parseRTFtoHTML(rtf) {
+      let html = '';
+      let bold = false;
+      let italic = false;
+      let fontSize = '';
+      let pos = 0;
+
+      while (pos < rtf.length) {
+        let char = rtf[pos];
+
+        if (char === '\\') {
+          const next = rtf.slice(pos);
+
+          if (/^\\b0/.test(next)) {
+            bold = false;
+            pos += 3;
+          } else if (/^\\b/.test(next)) {
+            bold = true;
+            pos += 2;
+          } else if (/^\\i0/.test(next)) {
+            italic = false;
+            pos += 3;
+          } else if (/^\\i/.test(next)) {
+            italic = true;
+            pos += 2;
+          } else if (/^\\fs\d+/.test(next)) {
+            const match = next.match(/^\\fs(\d+)/);
+            if (match) {
+              fontSize = parseInt(match[1]) / 2;
+              pos += match[0].length;
+            }
+          } else if (/^\\par/.test(next)) {
+            html += '<br>';
+            pos += 4;
+          } else if (/^\\'[0-9a-fA-F]{2}/.test(next)) {
+            const hex = next.match(/^\\'([0-9a-fA-F]{2})/)[1];
+            html += decodeCP1251(hex);
+            pos += 4;
+          } else {
+            const skip = next.match(/^\\[a-z]+\d* ?/);
+            pos += skip ? skip[0].length : 1;
+          }
+
+        } else if (char === '{' || char === '}') {
+          pos++; // пропускаем группы
+        } else {
+          let start = pos;
+          while (pos < rtf.length && !['\\', '{', '}'].includes(rtf[pos])) {
+            pos++;
+          }
+          const text = rtf.slice(start, pos)
+            .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          let styled = text;
+          if (fontSize) styled = `<span style="font-size:${fontSize}pt">${styled}</span>`;
+          if (italic) styled = `<i>${styled}</i>`;
+          if (bold) styled = `<b>${styled}</b>`;
+          html += styled;
+        }
+      }
+
+      return html;
+    }
+  </script>
+</body>
+</html>
